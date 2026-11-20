@@ -72,3 +72,20 @@ class ComposerTests(unittest.TestCase):
         self.assertIs(_editor_hit(text, document), editor)
         editor.parent.return_value = None
         self.assertIsNone(_editor_hit(text, document))
+
+class BrowserDocumentTests(unittest.TestCase):
+    def test_localized_address_bar_and_nested_document(self):
+        from unittest.mock import Mock
+        from astra.chatgpt import _verified_document
+        window, doc, iframe, address = (Mock() for _ in range(4))
+        doc.element_info.control_type = 'Document'
+        doc.parent.return_value = window
+        iframe.parent.return_value = doc
+        address.parent.return_value = window
+        address.element_info.name = 'Adresse'
+        address.element_info.automation_id = 'urlbar-input'
+        address.iface_value.CurrentValue = 'https://chatgpt.com/'
+        window.descendants.side_effect = lambda control_type: [doc, iframe] if control_type == 'Document' else [address]
+        self.assertIs(_verified_document(window)[0], doc)
+        address.parent.return_value = doc
+        self.assertIsNone(_verified_document(window)[0])

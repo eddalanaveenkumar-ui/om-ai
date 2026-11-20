@@ -191,6 +191,7 @@ class AstraApp:
             ):
                 result = {"action": "chatgpt_prompt", "status": "cancelled_by_user"}
             else:
+                self.root.iconify()  # Do not leave the approval window in front of the browser.
                 result = await asyncio.to_thread(run_chatgpt, prompt)
             execution_log.append(result)
             self.ui(self.write_log, "CHATGPT RESULT:\n" + json.dumps(result, indent=2, ensure_ascii=False))
