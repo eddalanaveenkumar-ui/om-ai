@@ -8,7 +8,7 @@ from astra.input_activity import activity_sink
 from astra.action_executor import execute as execute_targeted
 from astra.agents import orchestrate, plan, inspect_screen, make_actions, verify
 from astra.computer import execute_action, screenshot_data_url, coordinate_calibration, ALLOWED
-from astra.ui_policy import validate_ui_action
+from astra.ui_policy import opens_chrome, validate_ui_action
 
 from astra.indicator import ControlIndicator
 
@@ -187,10 +187,16 @@ class AstraApp:
         actions = proposed.get("actions", [])
 
         self.ui(self.write_log, "PROPOSED ACTIONS:\n" + json.dumps(proposed, indent=2))
-        for index, item in enumerate(actions, 1):
+        profile_ready = False
+        index = 0
+        while index < len(actions):
+            item = actions[index]
+            index += 1
             if not isinstance(item, dict) or item.get("action") not in ALLOWED:
                 raise ValueError(f"Rejected unsupported action: {item}")
             validate_ui_action(item)
+            if profile_ready and opens_chrome(item):
+                raise ValueError("Chrome is already open; refusing to reopen it after profile selection.")
             description = f"Action {index}/{len(actions)}: {json.dumps(item, ensure_ascii=False)}"
             if self.approval.get():
                 approved = self.ask_approval(description)
@@ -208,6 +214,29 @@ class AstraApp:
                 result = execute_action(item)
             execution_log.append({"action": item, "result": result})
             self.ui(self.write_log, "EXECUTED:\n" + json.dumps(execution_log[-1], indent=2))
+
+            if opens_chrome(item):
+                self.ui(self.set_status, "Paused — choose your Chrome profile")
+                ready = self.ask_approval(
+                    "Automation is paused. Switch to Chrome (Alt+Tab) and choose your profile. "
+                    "If Chrome already shows the profile you want, leave it open. "
+                    "Return here and choose Yes only when your browser window is ready. "
+                    "Choose No to stop. Astra will not select an account for you."
+                )
+                execution_log.append({"action": "manual_chrome_profile", "ready": ready})
+                if not ready:
+                    break
+                profile_ready = True
+                # The pre-launch plan cannot know which window opened. Replace its
+                # remaining actions rather than replaying stale picker or search steps.
+                image = await asyncio.to_thread(self.capture_clean_desktop)
+                observation = await inspect_screen(task, screenshot_url=image)
+                remaining = await make_actions(task, dict(plan_data, completed=
+                    "Chrome is open and the user confirmed their profile. Do not reopen Chrome or select an account. "
+                    "Return only remaining actions, or an empty list if finished."), observation)
+                actions = remaining.get("actions", [])
+                index = 0
+                self.ui(self.write_log, "AFTER PROFILE SELECTION:\n" + json.dumps(remaining, indent=2))
 
         final_observation = None
         if routing.get("needs_verification", True):
