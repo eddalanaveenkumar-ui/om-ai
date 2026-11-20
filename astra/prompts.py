@@ -53,6 +53,7 @@ the computer; the local application executes your structured actions after user 
 Only use these actions:
 click(target), double_click(target), right_click(target), move(target), scroll(target,amount),
 type_text(target,text), hotkey(keys), press_key(key), wait(seconds), screenshot().
+Include literal text in the text field of every type_text action, and a key field (e.g. "enter") for press_key. Never rely on reason or target to carry those values. After a Chrome launcher click the user chooses their own profile; do not choose a profile or enter credentials.
 For click, double_click, right_click, move, scroll and type_text include a target string naming the control and its context. Never supply x/y. The local grounder selects a live accessibility ID. Do not include passwords or secrets.
 Output JSON:
 {
