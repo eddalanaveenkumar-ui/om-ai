@@ -4,6 +4,7 @@ from tkinter import ttk, messagebox, scrolledtext
 from dotenv import load_dotenv
 load_dotenv()
 
+from astra.chatgpt import extract_prompt, run_chatgpt
 from astra.agents import orchestrate, plan, inspect_screen, make_actions, verify
 from astra.computer import execute_action, screenshot_data_url, screen_size, screenshot_dimensions, coordinate_calibration, launch_desktop_app, ALLOWED
 from astra.browser import extract_url, open_and_check, play_youtube_song, extract_youtube_search_query
@@ -153,7 +154,18 @@ class AstraApp:
         # prevents typing URLs into an unrelated foreground window.
         wants_brave = bool(re.search(r"\bbrave\b", task, flags=re.IGNORECASE))
         has_site = bool(re.search(r"https?://|\b[a-z0-9-]+\.[a-z]{2,}\b", task, flags=re.IGNORECASE))
-        if wants_brave and has_site:
+        prompt = extract_prompt(task)
+        if prompt:
+            self.ui(self.set_status, "3/6 — Opening ChatGPT (sign in manually if prompted)")
+            if self.approval.get() and not self.ask_approval(
+                "Open ChatGPT in a dedicated Chrome profile and send this prompt?\n\n" + prompt
+            ):
+                result = {"action": "chatgpt_prompt", "status": "cancelled_by_user"}
+            else:
+                result = await asyncio.to_thread(run_chatgpt, prompt)
+            execution_log.append(result)
+            self.ui(self.write_log, "CHATGPT RESULT:\n" + json.dumps(result, indent=2, ensure_ascii=False))
+        elif wants_brave and has_site:
             self.ui(self.set_status, "3/6 — Launching Brave directly")
             target_url = extract_url(task)
             approved = True
