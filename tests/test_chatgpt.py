@@ -19,16 +19,17 @@ class PromptRoutingTests(unittest.TestCase):
 
 
 class BrowserHandoffTests(unittest.TestCase):
-    def test_default_browser_gets_exact_prompt(self):
+    def test_submit_once_in_default_browser(self):
         from unittest.mock import patch
-        from urllib.parse import parse_qs, urlsplit
         from astra.chatgpt import run_chatgpt
+        with patch('astra.chatgpt.webbrowser.open_new_tab', return_value=True) as launch, \
+             patch('astra.chatgpt._submit_windows') as submit:
+            result = run_chatgpt('Build MeanAI')
+        launch.assert_called_once_with('https://chatgpt.com/')
+        submit.assert_called_once_with('Build MeanAI')
+        self.assertTrue(result['send_clicked'])
 
-        prompt = 'Build MeanAI & show C++ examples\nதமிழ் #1'
-        with patch('astra.chatgpt.webbrowser.open_new_tab', return_value=True) as launch:
-            result = run_chatgpt(prompt)
-        launch.assert_called_once()
-        url = urlsplit(launch.call_args.args[0])
-        self.assertEqual((url.scheme, url.netloc), ('https', 'chatgpt.com'))
-        self.assertEqual(parse_qs(url.query), {'q': [prompt]})
-        self.assertTrue(result['browser_open_requested'])
+    def test_origin(self):
+        from astra.chatgpt import _origin_ok
+        self.assertTrue(_origin_ok('chatgpt.com/'))
+        self.assertFalse(_origin_ok('https://chatgpt.com.example.org/'))
