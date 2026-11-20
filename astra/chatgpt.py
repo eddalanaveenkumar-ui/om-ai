@@ -27,6 +27,43 @@ def _origin_ok(value):
     return parsed.scheme == 'https' and parsed.netloc.lower() == 'chatgpt.com'
 
 
+def _outside_web_content(control, window):
+    parent = control.parent()
+    while parent and parent != window:
+        if parent.element_info.control_type == 'Document':
+            return False
+        parent = parent.parent()
+    return parent == window
+
+
+def _verified_document(window):
+    """Use browser chrome metadata. Never use an in-page field or an iframe's URL."""
+    documents = [d for d in window.descendants(control_type='Document')
+                 if d.is_visible() and _outside_web_content(d, window)]
+    if len(documents) != 1:
+        return None, f'expected one visible top-level browser document, found {len(documents)}'
+    found = False
+    for field in window.descendants(control_type='Edit'):
+        info = field.element_info
+        if not (re.search(r'address|search or enter', info.name or '', re.I)
+                or (info.automation_id or '').lower() in {'urlbar-input', 'addresseditbox', 'view_omnibus', 'omnibox'}
+                or (info.class_name or '').lower() == 'chrome_omniboxview'):
+            continue
+        if not field.is_visible() or not _outside_web_content(field, window):
+            continue
+        found = True
+        try:
+            value = field.iface_value.CurrentValue
+        except Exception:
+            continue
+        if isinstance(value, str) and value.strip():
+            if _origin_ok(value.strip()):
+                return documents[0], 'verified browser address'
+            return None, 'browser address is not chatgpt.com'
+    return None, ('browser address field has no readable value' if found else
+                  'browser address field was not exposed by Windows accessibility')
+
+
 def _submit_windows(prompt):
     # Each asyncio worker needs its own COM apartment, including on later runs
     # when pywinauto is already imported. Balance our initialization on exit.
@@ -82,22 +119,18 @@ def _drive_composer(prompt):
     desktop = Desktop(backend='uia')
     foreground = ctypes.windll.user32.GetForegroundWindow
 
+    diagnostic = 'no foreground window'
+
     def active_document():
+        nonlocal diagnostic
         handle = foreground()
         if not handle:
+            diagnostic = 'no foreground window'
             return None, None
         window = desktop.window(handle=handle).wrapper_object()
-        # Check the browser's address field, not text inside the web page.
-        for field in window.descendants(control_type='Edit'):
-            if not re.search(r'address|search or enter', field.window_text(), re.I):
-                continue
-            parent = field.parent()
-            while parent and parent != window and parent.element_info.control_type != 'Document':
-                parent = parent.parent()
-            if parent == window and _origin_ok(field.get_value()):
-                docs = [d for d in window.descendants(control_type='Document') if d.is_visible()]
-                if docs and foreground() == handle:
-                    return handle, docs[0]
+        doc, diagnostic = _verified_document(window)
+        if doc is not None and foreground() == handle:
+            return handle, doc
         return None, None
 
     def target_point(target):
@@ -111,7 +144,7 @@ def _drive_composer(prompt):
         if document is not None:
             break
         if time.monotonic() >= deadline:
-            raise RuntimeError('Could not verify the active chatgpt.com browser document before locating the composer.')
+            raise RuntimeError(f'Before composer lookup: {diagnostic}. Keep the ChatGPT tab in front in a normal browser window with its address bar visible.')
         time.sleep(.4)
     x, y = target_point('Inside the editable text area of the ChatGPT message composer, not its toolbar')
     editor = _editor_hit(desktop.from_point(x, y), document)
@@ -139,7 +172,7 @@ def _drive_composer(prompt):
     # accessible name, so waiting for a named UIA Send button never reaches locate().
     x, y = target_point("The enabled Send message arrow in the ChatGPT composer containing the pasted prompt")
     active, doc = active_document()
-    if active != handle or doc is None or foreground() != handle:
+    if active != handle or doc != document or foreground() != handle:
         raise RuntimeError('Active ChatGPT tab changed after paste; stopped without sending.')
     if _send_hit(desktop.from_point(x, y), doc) and foreground() == handle:
         pyautogui.moveTo(x, y, duration=0.18)
