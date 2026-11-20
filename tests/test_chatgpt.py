@@ -23,7 +23,7 @@ class BrowserHandoffTests(unittest.TestCase):
         from unittest.mock import patch
         from astra.chatgpt import run_chatgpt
         with patch('astra.chatgpt.webbrowser.open_new_tab', return_value=True) as launch, \
-             patch('astra.chatgpt._submit_windows') as submit:
+             patch('astra.chatgpt._submit_windows', return_value='click') as submit:
             result = run_chatgpt('Build MeanAI')
         launch.assert_called_once_with('https://chatgpt.com/')
         submit.assert_called_once_with('Build MeanAI')
@@ -33,3 +33,22 @@ class BrowserHandoffTests(unittest.TestCase):
         from astra.chatgpt import _origin_ok
         self.assertTrue(_origin_ok('chatgpt.com/'))
         self.assertFalse(_origin_ok('https://chatgpt.com.example.org/'))
+
+
+class SendTargetTests(unittest.TestCase):
+    def test_icon_inside_unnamed_button(self):
+        from unittest.mock import Mock
+        from astra.chatgpt import _send_hit
+        doc, button, icon = Mock(), Mock(), Mock()
+        icon.element_info.control_type = 'Image'
+        icon.parent.return_value = button
+        button.element_info.control_type = 'Button'
+        button.parent.return_value = doc
+        button.window_text.return_value = ''
+        self.assertTrue(_send_hit(icon, doc))
+        button.window_text.return_value = 'Think'
+        self.assertFalse(_send_hit(icon, doc))
+        button.window_text.return_value = 'Send message (Enter)'
+        self.assertTrue(_send_hit(icon, doc))
+        button.is_enabled.return_value = False
+        self.assertFalse(_send_hit(icon, doc))
