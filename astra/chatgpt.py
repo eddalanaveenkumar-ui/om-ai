@@ -1,7 +1,8 @@
 """Execute explicit 'open ChatGPT, <request>' tasks in a visible browser."""
 import re
 import webbrowser
-from urllib.parse import urlencode
+import time
+from urllib.parse import urlsplit
 
 
 def extract_prompt(task):
@@ -21,14 +22,94 @@ def extract_prompt(task):
     return prompt
 
 
+def _origin_ok(value):
+    parsed = urlsplit(value if '://' in value else 'https://' + value)
+    return parsed.scheme == 'https' and parsed.netloc.lower() == 'chatgpt.com'
+
+
+def _submit_windows(prompt):
+    # Each asyncio worker needs its own COM apartment, including on later runs
+    # when pywinauto is already imported. Balance our initialization on exit.
+    import ctypes
+    ole = ctypes.windll.ole32
+    if ole.CoInitializeEx(None, 0) < 0:
+        raise RuntimeError("Windows accessibility initialization failed.")
+    try:
+        _drive_composer(prompt)
+    finally:
+        ole.CoUninitialize()
+
+
+def _drive_composer(prompt):
+    import ctypes
+    import pyautogui
+    import pyperclip
+    from pywinauto import Desktop
+
+    desktop = Desktop(backend='uia')
+    foreground = ctypes.windll.user32.GetForegroundWindow
+
+    def active_document():
+        handle = foreground()
+        if not handle:
+            return None, None
+        window = desktop.window(handle=handle).wrapper_object()
+        # Check the browser's address field, not text inside the web page.
+        for field in window.descendants(control_type='Edit'):
+            if not re.search(r'address|search or enter', field.window_text(), re.I):
+                continue
+            parent = field.parent()
+            while parent and parent != window and parent.element_info.control_type != 'Document':
+                parent = parent.parent()
+            if parent == window and _origin_ok(field.get_value()):
+                docs = [d for d in window.descendants(control_type='Document') if d.is_visible()]
+                if docs and foreground() == handle:
+                    return handle, docs[0]
+        return None, None
+
+    def find(kind, matches, expected=None):
+        deadline = time.monotonic() + 25
+        while time.monotonic() < deadline:
+            handle, doc = active_document()
+            if expected and handle != expected:
+                raise RuntimeError('Browser focus or address changed; stopped without sending.')
+            if doc:
+                for control in doc.descendants(control_type=kind):
+                    if matches(control) and control.is_visible() and control.is_enabled():
+                        return handle, control
+            time.sleep(.4)
+        raise RuntimeError('ChatGPT control not found. Check login, browser accessibility and the active tab.')
+
+    def click(handle, control):
+        point = control.rectangle().mid_point()
+        hit = desktop.from_point(point.x, point.y)
+        while hit and hit != control:
+            hit = hit.parent()
+        if not hit or foreground() != handle:
+            raise RuntimeError('Control moved or is covered; no click performed.')
+        pyautogui.click(point.x, point.y)
+
+    handle, editor = find('Edit', lambda c: c.element_info.automation_id == 'prompt-textarea'
+                          or re.search(r'ask (anything|chatgpt)|message chatgpt', c.window_text(), re.I))
+    click(handle, editor)
+    if foreground() != handle or not editor.has_keyboard_focus():
+        raise RuntimeError('Composer focus could not be confirmed; no text pasted.')
+    pyperclip.copy(prompt)
+    pyautogui.hotkey('ctrl', 'v')
+    _, send = find('Button', lambda c: re.fullmatch(r'send(?: (?:prompt|message))?', c.window_text(), re.I), handle)
+    click(handle, send)
+
+
 def run_chatgpt(prompt):
-    """Hand off to the OS browser; do not attach to or close its session."""
-    url = 'https://chatgpt.com/?' + urlencode({'q': prompt})
-    opened = webbrowser.open_new_tab(url)
-    return {
-        'action': 'chatgpt_prompt',
-        'browser_open_requested': bool(opened),
-        'verification': ('Prompt passed in the ChatGPT URL. Submission and response are not '
-                         'confirmed; press Send if the prompt is still in the composer.' if opened else
-                         'Browser launch not confirmed. Check your default browser setting.'),
-    }
+    result = {'action': 'chatgpt_prompt', 'browser_open_requested': False, 'send_clicked': False}
+    if not webbrowser.open_new_tab('https://chatgpt.com/'):
+        result['problem'] = 'Browser launch not confirmed. Check your default browser setting.'
+        return result
+    result['browser_open_requested'] = True
+    try:
+        _submit_windows(prompt)
+        result['send_clicked'] = True
+        result['verification'] = 'Clicked Send; a completed response is not yet confirmed.'
+    except Exception as exc:
+        result['problem'] = str(exc)
+    return result
