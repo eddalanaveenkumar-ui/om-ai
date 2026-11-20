@@ -102,12 +102,8 @@ def _drive_composer(prompt):
 
     def target_point(target):
         import asyncio
-        from .grounding import locate
-        (px, py), frame = asyncio.run(locate(target))
-        width, height = pyautogui.size()
-        x = px * width // frame['width']
-        y = py * height // frame['height']
-        return x, y
+        from .action_executor import resolve
+        return asyncio.run(resolve(target))
 
     deadline = time.monotonic() + 25
     while True:
@@ -121,6 +117,9 @@ def _drive_composer(prompt):
     editor = _editor_hit(desktop.from_point(x, y), document)
     if editor is None or foreground() != handle:
         raise RuntimeError('The visually located composer did not hit an editable control in the active document.')
+    pyautogui.moveTo(x, y, duration=0.18)
+    if foreground() != handle or _editor_hit(desktop.from_point(x, y), document) != editor:
+        raise RuntimeError('Composer moved before click.')
     pyautogui.click(x, y)
     if foreground() != handle or not editor.has_keyboard_focus():
         raise RuntimeError('Composer focus could not be confirmed; no text pasted.')
@@ -143,6 +142,9 @@ def _drive_composer(prompt):
     if active != handle or doc is None or foreground() != handle:
         raise RuntimeError('Active ChatGPT tab changed after paste; stopped without sending.')
     if _send_hit(desktop.from_point(x, y), doc) and foreground() == handle:
+        pyautogui.moveTo(x, y, duration=0.18)
+        if not _send_hit(desktop.from_point(x, y), doc) or foreground() != handle:
+            raise RuntimeError('Send control moved before click.')
         pyautogui.click(x, y)
         return 'click'
     # Do not click an unrelated control. Enter is safe only in the same focused editor.

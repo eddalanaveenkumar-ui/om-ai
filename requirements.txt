@@ -1,7 +1,7 @@
 openai>=1.68.0
 python-dotenv>=1.0.1
 pyautogui>=0.9.54
-Pillow>=10.0.0
+Pillow>=10.1.0
 pydantic>=2.8.0
 playwright>=1.50.0
 pyinstaller>=6.11.0
@@ -9,3 +9,6 @@ pywinauto>=0.6.9; sys_platform == 'win32'
 pyperclip>=1.9
 
 pywin32>=306; sys_platform == "win32"
+uiautomation>=2.0.20; sys_platform == 'win32'
+pyobjc-framework-ApplicationServices>=10; sys_platform == 'darwin'
+pyobjc-framework-Cocoa>=10; sys_platform == 'darwin'

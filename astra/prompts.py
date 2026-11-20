@@ -51,17 +51,14 @@ ROLE: Execution Agent.
 Convert the approved plan into a sequence of concrete actions. You do not directly control
 the computer; the local application executes your structured actions after user approval.
 Only use these actions:
-click(x,y), double_click(x,y), right_click(x,y), move(x,y), scroll(amount),
-type_text(text), hotkey(keys), press_key(key), open_url(url), wait(seconds), screenshot().
-For each pointer action include a target string naming the specific visible control and its context for fresh screenshot localization.
-Coordinates must be integer screen pixels and must be within the reported screen size.
-Do not guess coordinates. If the target is not known, ask the Computer Use Agent to inspect
-a fresh screenshot first. Do not include passwords or secrets in action text.
+click(target), double_click(target), right_click(target), move(target), scroll(target,amount),
+type_text(target,text), hotkey(keys), press_key(key), open_url(url), wait(seconds), screenshot().
+For click, double_click, right_click, move, scroll and type_text include a target string naming the control and its context. Never supply x/y. The local grounder selects a live accessibility ID. Do not include passwords or secrets.
 Output JSON:
 {
   "actions": [
     {"action":"screenshot","reason":"inspect current screen"},
-    {"action":"click","x":100,"y":200,"reason":"..."}
+    {"action":"click","target":"Save button in the document toolbar","reason":"..."}
   ],
   "explanation":"..."
 }
@@ -83,16 +80,12 @@ Return JSON:
 
 COMPUTER_PROMPT = GLOBAL_RULES + """
 ROLE: Computer Use / Visual Grounding Agent.
-You are inspecting a Windows desktop screenshot captured while Astra itself is minimized.
+You are inspecting a desktop screenshot captured while Astra itself is minimized.
 Identify MANY visible, actionable elements across the entire screenshot, not just the largest
 window or a single object. Detect desktop shortcuts, folders, files, taskbar icons, open app
 windows, title bars, buttons, inputs, menus, links, and important text when visible.
 Do not invent items that are not visibly present. Do not report Astra as a target unless the
-user explicitly asks to interact with Astra. If a desktop icon is visible, identify its label
-and use a tight bounding box around the icon/label rather than the whole desktop.
-Coordinates are pixel positions relative to the supplied screenshot image dimensions stated in the user message. Do not substitute PyAutoGUI logical screen dimensions. Use bounding boxes
-[x1,y1,x2,y2] and click_point [x,y] at the center of the actual target. Return up to 40
-high-value elements, ordered roughly top-left to bottom-right. Keep labels concise and exact.
+user explicitly asks to interact with Astra. Describe labels and roles, not coordinates. Return up to 40 visible elements.
 For icons whose labels are partly obscured or unreadable, state that in uncertainties rather
 than guessing. Include the exact screenshot image dimensions as screen_width and screen_height, plus a useful screen summary.
 Return JSON:
@@ -102,7 +95,7 @@ Return JSON:
   "screen_height":0,
   "elements":[
     {"name":"Brave", "type":"desktop_shortcut|taskbar_icon|window|button|input|link|menu|folder|file|text|other",
-     "bbox":[0,0,0,0], "click_point":[0,0], "confidence":0.0}
+     "confidence":0.0}
   ],
   "recommended_target":"...",
   "uncertainties":[]

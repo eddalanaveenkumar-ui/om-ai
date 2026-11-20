@@ -8,19 +8,10 @@ from PIL import Image
 DPI_AWARENESS = "not-windows"
 if platform.system() == "Windows":
     try:
-        # Per-monitor DPI awareness v2 (Windows 10 1703+)
-        ctypes.windll.user32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4))
-        DPI_AWARENESS = "per-monitor-v2"
-    except Exception:
-        try:
-            ctypes.windll.shcore.SetProcessDpiAwareness(2)
-            DPI_AWARENESS = "per-monitor"
-        except Exception:
-            try:
-                ctypes.windll.user32.SetProcessDPIAware()
-                DPI_AWARENESS = "system-aware-fallback"
-            except Exception:
-                DPI_AWARENESS = "failed"
+        hr = ctypes.windll.shcore.SetProcessDpiAwareness(2)
+        DPI_AWARENESS = "per-monitor" if hr == 0 else "already-set-or-unavailable"
+    except (AttributeError, OSError):
+        DPI_AWARENESS = "system-aware-fallback" if ctypes.windll.user32.SetProcessDPIAware() else "failed"
 
 import pyautogui
 

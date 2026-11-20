@@ -4,7 +4,7 @@ from tkinter import ttk, messagebox, scrolledtext
 from dotenv import load_dotenv
 load_dotenv()
 
-from astra.grounding import locate
+from astra.action_executor import execute as execute_targeted
 from astra.chatgpt import extract_prompt, run_chatgpt
 from astra.agents import orchestrate, plan, inspect_screen, make_actions, verify
 from astra.computer import execute_action, screenshot_data_url, screen_size, screenshot_dimensions, coordinate_calibration, launch_desktop_app, ALLOWED
@@ -275,35 +275,7 @@ class AstraApp:
             proposed = await make_actions(task, plan_data, observation)
             actions = proposed.get("actions", [])
 
-            # For the common explicit request "open Brave from the desktop and
-            # open <site>", use the detected Brave shortcut and a deterministic
-            # address-bar sequence. This avoids stopping after a single click.
-            wants_brave_and_site = "brave" in task.lower() and bool(re.search(r"\b(?:https?://|[a-z0-9-]+\.[a-z]{2,})", task.lower()))
-            if wants_brave_and_site and isinstance(observation, dict):
-                brave = next((e for e in observation.get("elements", [])
-                              if "brave" in str(e.get("name", "")).lower()
-                              and e.get("type") in {"desktop_shortcut", "taskbar_icon"}), None)
-                if brave and isinstance(brave.get("click_point"), list) and len(brave["click_point"]) == 2:
-                    target_url = extract_url(task)
-                    bx, by = brave["click_point"]
-                    actions = [
-                        {"action": "double_click", "x": int(bx), "y": int(by), "reason": "Open the detected Brave desktop shortcut"},
-                        {"action": "wait", "seconds": 3, "reason": "Wait for Brave to launch"},
-                        {"action": "hotkey", "keys": ["ctrl", "l"], "reason": "Focus the browser address bar"},
-                        {"action": "type_text", "text": target_url, "reason": "Enter the requested website address"},
-                        {"action": "press_key", "key": "enter", "reason": "Navigate to the requested website"},
-                        {"action": "wait", "seconds": 5, "reason": "Wait for the website to load"}
-                    ]
-                    proposed = {"actions": actions,
-                                "explanation": "Using the visually detected Brave shortcut, then navigating through the address bar."}
-
             self.ui(self.write_log, "PROPOSED ACTIONS:\n" + json.dumps(proposed, indent=2))
-            # Use the actual bitmap dimensions locally; never trust dimensions
-            # guessed by the vision model for coordinate conversion.
-            coordinate_size = screenshot_dimensions()
-            calibration = coordinate_calibration()
-            self.ui(self.write_log, "ACTION COORDINATE CALIBRATION:\n" + json.dumps(calibration, indent=2))
-
             for index, item in enumerate(actions, 1):
                 if not isinstance(item, dict) or item.get("action") not in ALLOWED:
                     raise ValueError(f"Rejected unsupported action: {item}")
@@ -318,13 +290,10 @@ class AstraApp:
                 # out of the actual input path before grounding or sending keys.
                 self.root.iconify()
                 await asyncio.sleep(0.5)
-                if item["action"] in {"click", "double_click", "right_click", "move"}:
-                    target = item.get("target") or item.get("reason")
-                    if not target:
-                        raise ValueError("Pointer action needs a named visual target.")
-                    (x, y), coordinate_size = await locate(target)
-                    item = dict(item, x=x, y=y)
-                result = execute_action(item, coordinate_size=coordinate_size)
+                if item["action"] in {"click", "double_click", "right_click", "move", "scroll", "type_text"}:
+                    result = await execute_targeted(item)
+                else:
+                    result = execute_action(item)
                 execution_log.append({"action": item, "result": result})
                 self.ui(self.write_log, "EXECUTED:\n" + json.dumps(execution_log[-1], indent=2))
 
