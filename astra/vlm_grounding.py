@@ -1,4 +1,5 @@
 """ID selection cannot change the operation or payload approved by the user."""
+from .recovery import TargetNotReady
 import base64
 import io
 import json
@@ -22,5 +23,5 @@ async def select(image, elements, target, action, text=None):
             type(data.get('element_id')) is not int or data['element_id'] not in elements or
             data.get('action') != action or ('text_to_type' in data and
             (action != 'type' or data['text_to_type'] != text))):
-        raise ValueError('Invalid or ambiguous SoM selection; no input performed.')
+        raise TargetNotReady('Invalid or ambiguous SoM selection; no input performed.')
     return data['element_id']
