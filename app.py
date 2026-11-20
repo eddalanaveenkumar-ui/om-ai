@@ -10,6 +10,9 @@ from astra.agents import orchestrate, plan, inspect_screen, make_actions, verify
 from astra.computer import execute_action, screenshot_data_url, screen_size, screenshot_dimensions, coordinate_calibration, launch_desktop_app, ALLOWED
 from astra.browser import extract_url, open_and_check, play_youtube_song, extract_youtube_search_query
 
+from astra.indicator import ControlIndicator
+
+
 class AstraApp:
     def __init__(self, root):
         self.root = root
@@ -17,6 +20,7 @@ class AstraApp:
         root.geometry("1000x760")
         root.minsize(800, 600)
         self.busy = False
+        self.indicator = ControlIndicator(root)
         self._build()
 
     def _build(self):
@@ -81,11 +85,18 @@ class AstraApp:
         if not task:
             messagebox.showwarning("Astra", "Enter a task first.")
             return
+        try:
+            self.indicator.start()
+        except Exception as exc:
+            self.indicator.stop()
+            self.write_log(f"Cannot show AI control indicator; task not started: {exc}")
+            return
         self.busy = True
         self.run_btn.configure(state="disabled")
         threading.Thread(target=self.workflow, args=(task,), daemon=True).start()
 
     def finish(self):
+        self.indicator.stop()
         self.root.deiconify()
         self.busy = False
         self.run_btn.configure(state="normal")
