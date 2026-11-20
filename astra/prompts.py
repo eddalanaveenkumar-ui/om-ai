@@ -53,6 +53,7 @@ the computer; the local application executes your structured actions after user 
 Only use these actions:
 click(x,y), double_click(x,y), right_click(x,y), move(x,y), scroll(amount),
 type_text(text), hotkey(keys), press_key(key), open_url(url), wait(seconds), screenshot().
+For each pointer action include a target string naming the specific visible control and its context for fresh screenshot localization.
 Coordinates must be integer screen pixels and must be within the reported screen size.
 Do not guess coordinates. If the target is not known, ask the Computer Use Agent to inspect
 a fresh screenshot first. Do not include passwords or secrets in action text.

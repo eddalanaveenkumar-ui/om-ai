@@ -80,24 +80,30 @@ def _drive_composer(prompt):
             time.sleep(.4)
         raise RuntimeError('ChatGPT control not found. Check login, browser accessibility and the active tab.')
 
-    def click(handle, control):
-        point = control.rectangle().mid_point()
-        hit = desktop.from_point(point.x, point.y)
+    def click(handle, control, target):
+        import asyncio
+        from .grounding import locate
+        (px, py), frame = asyncio.run(locate(target))
+        width, height = pyautogui.size()
+        x = px * width // frame['width']
+        y = py * height // frame['height']
+        hit = desktop.from_point(x, y)
         while hit and hit != control:
             hit = hit.parent()
         if not hit or foreground() != handle:
             raise RuntimeError('Control moved or is covered; no click performed.')
-        pyautogui.click(point.x, point.y)
+        pyautogui.click(x, y)
 
     handle, editor = find('Edit', lambda c: c.element_info.automation_id == 'prompt-textarea'
                           or re.search(r'ask (anything|chatgpt)|message chatgpt', c.window_text(), re.I))
-    click(handle, editor)
+    click(handle, editor, "The editable ChatGPT message composer, inside its text area")
     if foreground() != handle or not editor.has_keyboard_focus():
         raise RuntimeError('Composer focus could not be confirmed; no text pasted.')
     pyperclip.copy(prompt)
     pyautogui.hotkey('ctrl', 'v')
-    _, send = find('Button', lambda c: re.fullmatch(r'send(?: (?:prompt|message))?', c.window_text(), re.I), handle)
-    click(handle, send)
+    _, send = find('Button', lambda c: c.element_info.automation_id == 'composer-submit-button'
+                   or re.fullmatch(r'send(?: (?:prompt|message))?', c.window_text(), re.I), handle)
+    click(handle, send, "The enabled Send message arrow button in the ChatGPT composer")
 
 
 def run_chatgpt(prompt):

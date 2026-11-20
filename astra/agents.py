@@ -1,4 +1,6 @@
 import json
+import base64
+import struct
 from .config import settings
 from .llm import ask_json
 from .prompts import (ORCHESTRATOR_PROMPT, PLANNER_PROMPT, EXECUTOR_PROMPT,
@@ -14,12 +16,12 @@ async def plan(user_task, routing):
     return await ask_json("planner", settings.planner_model, PLANNER_PROMPT, payload)
 
 async def inspect_screen(user_task, screenshot_url=None):
-    size = screen_size()
-    image_size = screenshot_dimensions()
     screenshot_url = screenshot_url or screenshot_data_url()
+    # IHDR dimensions from the exact PNG supplied, not another capture.
+    width, height = struct.unpack('>II', base64.b64decode(screenshot_url.split(',', 1)[1][:32])[16:24])
     content = [
         {"type": "text", "text": (
-            f"User request: {user_task}\\nScreen dimensions: {size}\\n"
+            f"User request: {user_task}\\nScreenshot bitmap dimensions: {width} x {height}\\n"
             "Inspect this screenshot. Return grounded observations in the required JSON schema."
         )},
         {"type": "image_url", "image_url": {"url": screenshot_url}}
