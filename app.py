@@ -158,7 +158,7 @@ class AstraApp:
         if prompt:
             self.ui(self.set_status, "3/6 — Opening ChatGPT (sign in manually if prompted)")
             if self.approval.get() and not self.ask_approval(
-                "Open ChatGPT in a dedicated Chrome profile and send this prompt?\n\n" + prompt
+                "Open this prompt in ChatGPT using your default browser? The prompt will be part of the URL and may appear in browser history.\n\n" + prompt
             ):
                 result = {"action": "chatgpt_prompt", "status": "cancelled_by_user"}
             else:
