@@ -4,6 +4,7 @@ from tkinter import ttk, messagebox, scrolledtext
 from dotenv import load_dotenv
 load_dotenv()
 
+from astra.grounding import locate
 from astra.chatgpt import extract_prompt, run_chatgpt
 from astra.agents import orchestrate, plan, inspect_screen, make_actions, verify
 from astra.computer import execute_action, screenshot_data_url, screen_size, screenshot_dimensions, coordinate_calibration, launch_desktop_app, ALLOWED
@@ -55,6 +56,22 @@ class AstraApp:
     def ui(self, fn, *args):
         self.root.after(0, lambda: fn(*args))
 
+    def ask_approval(self, description):
+        # Workflow runs on a worker; modal Tk dialogs belong to the UI thread.
+        done = threading.Event()
+        answer = []
+
+        def show():
+            try:
+                self.root.deiconify()
+                answer.append(messagebox.askyesno("Approve Astra action", description, parent=self.root))
+            finally:
+                done.set()
+
+        self.root.after(0, show)
+        done.wait()
+        return bool(answer and answer[0])
+
     def set_status(self, value):
         self.status.set(value)
 
@@ -69,6 +86,7 @@ class AstraApp:
         threading.Thread(target=self.workflow, args=(task,), daemon=True).start()
 
     def finish(self):
+        self.root.deiconify()
         self.busy = False
         self.run_btn.configure(state="normal")
         self.set_status("Ready")
@@ -285,6 +303,16 @@ class AstraApp:
                         execution_log.append({"action": item, "status": "skipped_by_user"})
                         break
                 self.ui(self.set_status, f"4/6 — Executing action {index}/{len(actions)}")
+                # Approval dialogs and clean-screen inspection restore Astra. Keep it
+                # out of the actual input path before grounding or sending keys.
+                self.root.iconify()
+                await asyncio.sleep(0.5)
+                if item["action"] in {"click", "double_click", "right_click", "move"}:
+                    target = item.get("target") or item.get("reason")
+                    if not target:
+                        raise ValueError("Pointer action needs a named visual target.")
+                    (x, y), coordinate_size = await locate(target)
+                    item = dict(item, x=x, y=y)
                 result = execute_action(item, coordinate_size=coordinate_size)
                 execution_log.append({"action": item, "result": result})
                 self.ui(self.write_log, "EXECUTED:\n" + json.dumps(execution_log[-1], indent=2))
