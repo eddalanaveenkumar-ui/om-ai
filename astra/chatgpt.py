@@ -35,9 +35,23 @@ def _submit_windows(prompt):
     if ole.CoInitializeEx(None, 0) < 0:
         raise RuntimeError("Windows accessibility initialization failed.")
     try:
-        _drive_composer(prompt)
+        return _drive_composer(prompt)
     finally:
         ole.CoUninitialize()
+
+
+def _send_hit(hit, doc):
+    """Validate the visually located arrow, including an icon child of an unnamed button."""
+    button = None
+    while hit and hit != doc:
+        if button is None and hit.element_info.control_type == 'Button':
+            button = hit
+        hit = hit.parent()
+    if not hit or button is None or not button.is_enabled() or not button.is_visible():
+        return False
+    name = button.window_text().strip()
+    return (not name or bool(re.search(r'\bsend\b', name, re.I))
+            or button.element_info.automation_id in {'send-button', 'composer-submit-button'})
 
 
 def _drive_composer(prompt):
@@ -80,13 +94,17 @@ def _drive_composer(prompt):
             time.sleep(.4)
         raise RuntimeError('ChatGPT control not found. Check login, browser accessibility and the active tab.')
 
-    def click(handle, control, target):
+    def target_point(target):
         import asyncio
         from .grounding import locate
         (px, py), frame = asyncio.run(locate(target))
         width, height = pyautogui.size()
         x = px * width // frame['width']
         y = py * height // frame['height']
+        return x, y
+
+    def click(handle, control, target):
+        x, y = target_point(target)
         hit = desktop.from_point(x, y)
         while hit and hit != control:
             hit = hit.parent()
@@ -101,9 +119,20 @@ def _drive_composer(prompt):
         raise RuntimeError('Composer focus could not be confirmed; no text pasted.')
     pyperclip.copy(prompt)
     pyautogui.hotkey('ctrl', 'v')
-    _, send = find('Button', lambda c: c.element_info.automation_id == 'composer-submit-button'
-                   or re.fullmatch(r'send(?: (?:prompt|message))?', c.window_text(), re.I), handle)
-    click(handle, send, "The enabled Send message arrow button in the ChatGPT composer")
+    # Locate visually first. Some browser builds expose the arrow with an empty
+    # accessible name, so waiting for a named UIA Send button never reaches locate().
+    x, y = target_point("The enabled Send message arrow in the ChatGPT composer containing the pasted prompt")
+    active, doc = active_document()
+    if active != handle or doc is None or foreground() != handle:
+        raise RuntimeError('Active ChatGPT tab changed after paste; stopped without sending.')
+    if _send_hit(desktop.from_point(x, y), doc) and foreground() == handle:
+        pyautogui.click(x, y)
+        return 'click'
+    # Do not click an unrelated control. Enter is safe only in the same focused editor.
+    if editor.has_keyboard_focus() and foreground() == handle:
+        pyautogui.press('enter')
+        return 'enter'
+    raise RuntimeError('Send hit-test and composer focus checks failed; prompt left unsent.')
 
 
 def run_chatgpt(prompt):
@@ -113,9 +142,10 @@ def run_chatgpt(prompt):
         return result
     result['browser_open_requested'] = True
     try:
-        _submit_windows(prompt)
-        result['send_clicked'] = True
-        result['verification'] = 'Clicked Send; a completed response is not yet confirmed.'
+        method = _submit_windows(prompt)
+        result['submission_action'] = method
+        result['send_clicked'] = method == 'click'
+        result['verification'] = 'Submission attempted; a completed response is not yet confirmed.'
     except Exception as exc:
         result['problem'] = str(exc)
     return result
