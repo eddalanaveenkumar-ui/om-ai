@@ -4,6 +4,7 @@ from tkinter import ttk, messagebox, scrolledtext
 from dotenv import load_dotenv
 load_dotenv()
 
+from astra.skills import chatgpt_goal, chatgpt_skill, launch_default_browser
 from astra.input_activity import activity_sink
 from astra.action_executor import execute as execute_targeted
 from astra.agents import orchestrate, plan, inspect_screen, make_actions, verify
@@ -183,7 +184,9 @@ class AstraApp:
             self.ui(self.write_log, "COMPUTER AGENT OBSERVATION:\n" + json.dumps(observation, indent=2))
 
         self.ui(self.set_status, "4/6 — Preparing computer actions")
-        proposed = await make_actions(task, plan_data, observation)
+        prompt = chatgpt_goal(task)
+        proposed = ({"skill": "chatgpt_creation", "actions": chatgpt_skill(prompt)} if prompt
+                    else await make_actions(task, plan_data, observation))
         actions = proposed.get("actions", [])
 
         self.ui(self.write_log, "PROPOSED ACTIONS:\n" + json.dumps(proposed, indent=2))
@@ -192,12 +195,18 @@ class AstraApp:
         while index < len(actions):
             item = actions[index]
             index += 1
-            if not isinstance(item, dict) or item.get("action") not in ALLOWED:
+            skill_step = prompt and isinstance(item, dict) and item.get("action") in {"launch_default_browser", "confirm_chatgpt"}
+            if not skill_step and (not isinstance(item, dict) or item.get("action") not in ALLOWED):
                 raise ValueError(f"Rejected unsupported action: {item}")
             validate_ui_action(item)
             if profile_ready and opens_chrome(item):
                 raise ValueError("Chrome is already open; refusing to reopen it after profile selection.")
             description = f"Action {index}/{len(actions)}: {json.dumps(item, ensure_ascii=False)}"
+            if item["action"] == "confirm_chatgpt":
+                if not self.ask_approval("Check that the active site is chatgpt.com, sign in yourself if needed, and open an empty chat. Continue only when ready to enter your request?"):
+                    execution_log.append({"action": item, "status": "cancelled"})
+                    break
+                continue
             if self.approval.get():
                 approved = self.ask_approval(description)
                 if not approved:
@@ -208,18 +217,20 @@ class AstraApp:
             # out of the actual input path before grounding or sending keys.
             self.root.iconify()
             await asyncio.sleep(0.5)
-            if item["action"] in {"click", "double_click", "right_click", "move", "scroll", "type_text"}:
+            if item["action"] == "launch_default_browser":
+                result = await asyncio.to_thread(launch_default_browser)
+            elif item["action"] in {"click", "double_click", "right_click", "move", "scroll", "type_text"}:
                 result = await execute_targeted(item)
             else:
                 result = execute_action(item)
             execution_log.append({"action": item, "result": result})
             self.ui(self.write_log, "EXECUTED:\n" + json.dumps(execution_log[-1], indent=2))
 
-            if opens_chrome(item):
-                self.ui(self.set_status, "Paused — choose your Chrome profile")
+            if opens_chrome(item) or item["action"] == "launch_default_browser":
+                self.ui(self.set_status, "Paused — confirm browser profile")
                 ready = self.ask_approval(
-                    "Automation is paused. Switch to Chrome (Alt+Tab) and choose your profile. "
-                    "If Chrome already shows the profile you want, leave it open. "
+                    "Automation is paused. Switch to your browser (Alt+Tab) and choose your profile. "
+                    "If the browser already shows the profile you want, leave it open. "
                     "Return here and choose Yes only when your browser window is ready. "
                     "Choose No to stop. Astra will not select an account for you."
                 )
@@ -227,6 +238,8 @@ class AstraApp:
                 if not ready:
                     break
                 profile_ready = True
+                if prompt:
+                    continue  # Resume the fixed recipe; each target is grounded live.
                 # The pre-launch plan cannot know which window opened. Replace its
                 # remaining actions rather than replaying stale picker or search steps.
                 image = await asyncio.to_thread(self.capture_clean_desktop)
