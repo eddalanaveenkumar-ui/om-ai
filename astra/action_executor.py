@@ -7,6 +7,7 @@ from .accessibility_extractor import extract
 from .som_annotator import annotate, pixels
 from .vlm_grounding import select
 from .grounding import locate
+from .input_activity import activity
 
 
 def center(element):
@@ -32,7 +33,10 @@ async def resolve(target, action='click', text=None):
     window, elements = extract(size, system_ui)
     if not elements:
         (x,y), frame = await locate(target)
-        return x*size[0]//frame['width'], y*size[1]//frame['height']
+        point = x*size[0]//frame['width'], y*size[1]//frame['height']
+        activity('target_measured', source='vision', screenshot_px=[x,y], mouse_xy=point,
+                 screenshot_size=frame, desktop_size=size)
+        return point
     marked = annotate(image, elements, size)
     debug = os.getenv('DEBUG_SOM','').lower() in {'true','1','yes'}
     if debug:
@@ -50,6 +54,9 @@ async def resolve(target, action='click', text=None):
     if debug:
         ImageDraw.Draw(marked).ellipse((x-4,y-4,x+4,y+4), fill='red', outline='white')
         marked.save('debug_target.png')
+    activity('target_measured', source='accessibility', element_id=key, role=element['role'],
+             bbox=element['bbox'], screenshot_px=[x,y], mouse_xy=point,
+             screenshot_size=image.size, desktop_size=size)
     return point
 
 

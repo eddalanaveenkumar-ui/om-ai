@@ -4,6 +4,7 @@ from tkinter import ttk, messagebox, scrolledtext
 from dotenv import load_dotenv
 load_dotenv()
 
+from astra.input_activity import activity_sink, requests_input
 from astra.action_executor import execute as execute_targeted
 from astra.chatgpt import extract_prompt, run_chatgpt
 from astra.agents import orchestrate, plan, inspect_screen, make_actions, verify
@@ -151,12 +152,14 @@ class AstraApp:
 
 
     def workflow(self, task):
+        token = activity_sink.set(lambda event: self.ui(self.write_log, "COMPUTER INPUT: " + json.dumps(event)))
         try:
             asyncio.run(self.async_workflow(task))
         except Exception as e:
             self.ui(self.write_log, "WORKFLOW ERROR: " + str(e))
             self.ui(self.write_log, traceback.format_exc())
         finally:
+            activity_sink.reset(token)
             self.ui(self.finish)
 
 
@@ -195,7 +198,7 @@ class AstraApp:
                 result = await asyncio.to_thread(run_chatgpt, prompt)
             execution_log.append(result)
             self.ui(self.write_log, "CHATGPT RESULT:\n" + json.dumps(result, indent=2, ensure_ascii=False))
-        elif wants_brave and has_site:
+        elif wants_brave and has_site and not requests_input(task):
             self.ui(self.set_status, "3/6 — Launching Brave directly")
             target_url = extract_url(task)
             approved = True
@@ -222,7 +225,7 @@ class AstraApp:
             else:
                 execution_log.append({"action": "launch_brave_and_open_url", "status": "cancelled_by_user"})
                 self.ui(self.write_log, "Brave launch cancelled by user.")
-        elif is_browser_task:
+        elif is_browser_task and not requests_input(task):
             wants_youtube_song = bool(re.search(r"youtube", task, re.I) and re.search(r"\b(play|song|music)\b", task, re.I))
             if wants_youtube_song:
                 self.ui(self.set_status, "3/6 — Launching Chrome and playing a YouTube song")

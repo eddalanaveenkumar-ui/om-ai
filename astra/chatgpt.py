@@ -1,5 +1,6 @@
 """Execute explicit 'open ChatGPT, <request>' tasks in a visible browser."""
 import re
+from .input_activity import activity
 import webbrowser
 import time
 from urllib.parse import urlsplit
@@ -154,6 +155,7 @@ def _drive_composer(prompt):
     if foreground() != handle or _editor_hit(desktop.from_point(x, y), document) != editor:
         raise RuntimeError('Composer moved before click.')
     pyautogui.click(x, y)
+    activity('click', target='composer', mouse_xy=[x,y])
     if foreground() != handle or not editor.has_keyboard_focus():
         raise RuntimeError('Composer focus could not be confirmed; no text pasted.')
     try:
@@ -168,6 +170,7 @@ def _drive_composer(prompt):
         if foreground() != handle or not editor.has_keyboard_focus():
             raise RuntimeError('Composer lost focus before paste.')
         pyautogui.hotkey('ctrl', 'v')
+        activity('hotkey', keys=['ctrl','v'])
     # Locate visually first. Some browser builds expose the arrow with an empty
     # accessible name, so waiting for a named UIA Send button never reaches locate().
     x, y = target_point("The enabled Send message arrow in the ChatGPT composer containing the pasted prompt")
@@ -179,10 +182,12 @@ def _drive_composer(prompt):
         if not _send_hit(desktop.from_point(x, y), doc) or foreground() != handle:
             raise RuntimeError('Send control moved before click.')
         pyautogui.click(x, y)
+        activity('click', target='send', mouse_xy=[x,y])
         return 'click'
     # Do not click an unrelated control. Enter is safe only in the same focused editor.
     if editor.has_keyboard_focus() and foreground() == handle:
         pyautogui.press('enter')
+        activity('press_key', key='enter')
         return 'enter'
     raise RuntimeError('Send hit-test and composer focus checks failed; prompt left unsent.')
 
