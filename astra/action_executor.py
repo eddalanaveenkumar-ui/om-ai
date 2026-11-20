@@ -1,4 +1,5 @@
 """One fresh snapshot per approved target; coordinates returned in mouse units."""
+from .recovery import TargetNotReady
 import os
 import re
 import sys
@@ -50,7 +51,7 @@ async def resolve(target, action='click', text=None):
     patch = (max(0,x-12), max(0,y-12), min(image.width,x+13), min(image.height,y+13))
     if (window != current_window or element not in current_elements.values() or current.size != image.size
             or logical_size(gui) != size or current.crop(patch).tobytes() != image.crop(patch).tobytes()):
-        raise RuntimeError('Selected control changed during inference. No input performed.')
+        raise TargetNotReady('Selected control changed during inference. No input performed.')
     if debug:
         ImageDraw.Draw(marked).ellipse((x-4,y-4,x+4,y+4), fill='red', outline='white')
         marked.save('debug_target.png')

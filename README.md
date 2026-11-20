@@ -141,3 +141,7 @@ Set `DEBUG_SOM=True` in `.env` and restart to save `debug_som.png` and `debug_ta
 ### Direct creation requests
 
 Try **Create an HTML login page with ChatGPT**. Direct creation requests ending in “with/using/via/in ChatGPT” use a reusable UI recipe rather than relying on the model to invent each step. Its only launch exception is the OS default browser (no task URL or prompt is passed to it). Choose your profile, then Astra searches for ChatGPT and clicks the official result through the visible UI. Confirm the site and empty composer before it types and submits your request. Per-action approvals still apply. The result stays in the conversation; this recipe does not save files. Explicit step-by-step tasks still use the ordinary desktop executor.
+
+### Recovering a desktop task
+
+If targeting fails before any input is sent (for example, a control moved or the selection is ambiguous), Astra logs the failure, inspects a fresh screen and asks for a repair for that step. The remaining queue is preserved. A partial or failed final verification can also propose remaining steps, with explicit approval before continuing. A shared three-round limit prevents runaway retries. Cancellation, fail-safe stops, uncertain input errors and invalid or empty repair plans are not automatically retried.

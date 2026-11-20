@@ -1,14 +1,15 @@
 """Resolve a single visual target on the current primary display, not a past plan."""
+from .recovery import TargetNotReady
 import base64
 import io
 
 
 def box_center(box, width, height):
     if not isinstance(box, list) or len(box) != 4 or any(type(n) != int for n in box):
-        raise ValueError('No reliable visual target; no pointer action performed.')
+        raise TargetNotReady('No reliable visual target; no pointer action performed.')
     left, top, right, bottom = box
     if not (0 <= left < right <= 1000 and 0 <= top < bottom <= 1000):
-        raise ValueError('Invalid normalized target bounds.')
+        raise TargetNotReady('Invalid normalized target bounds.')
     return ((left + right) * width // 2000, (top + bottom) * height // 2000)
 
 
@@ -32,5 +33,5 @@ async def locate(target):
     current = pyautogui.screenshot().convert('RGB')
     patch = (max(0,x-18), max(0,y-12), min(image.width,x+19), min(image.height,y+13))
     if current.size != image.size or current.crop(patch).tobytes() != image.crop(patch).tobytes():
-        raise RuntimeError('Target changed during inspection. No click performed; retry on a stable screen.')
+        raise TargetNotReady('Target changed during inspection. No click performed; retry on a stable screen.')
     return (x, y), {'width': image.width, 'height': image.height}
