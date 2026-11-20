@@ -52,3 +52,23 @@ class SendTargetTests(unittest.TestCase):
         self.assertTrue(_send_hit(icon, doc))
         button.is_enabled.return_value = False
         self.assertFalse(_send_hit(icon, doc))
+
+class ComposerTests(unittest.TestCase):
+    def test_existing_draft(self):
+        from astra.chatgpt import _needs_paste
+        self.assertTrue(_needs_paste('', 'MeanAI'))
+        self.assertFalse(_needs_paste('MeanAI\r\nHTML', 'MeanAI\nHTML'))
+        with self.assertRaises(RuntimeError):
+            _needs_paste('Unrelated draft', 'MeanAI')
+
+    def test_unnamed_editor_in_verified_document(self):
+        from unittest.mock import Mock
+        from astra.chatgpt import _editor_hit
+        text, editor, document = Mock(), Mock(), Mock()
+        text.element_info.control_type = 'Text'
+        text.parent.return_value = editor
+        editor.element_info.control_type = 'Edit'
+        editor.parent.return_value = document
+        self.assertIs(_editor_hit(text, document), editor)
+        editor.parent.return_value = None
+        self.assertIsNone(_editor_hit(text, document))
