@@ -1,6 +1,7 @@
 import json, threading, traceback, asyncio, time
 import tkinter as tk
-from tkinter import ttk, messagebox, scrolledtext
+from tkinter import messagebox
+from astra.workspace_ui import build
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -26,35 +27,12 @@ class AstraApp:
         self._build()
 
     def _build(self):
-        outer = ttk.Frame(self.root, padding=12)
-        outer.pack(fill="both", expand=True)
-        ttk.Label(outer, text="ASTRA COMPUTER AGENT", font=("Segoe UI", 18, "bold")).pack(anchor="w")
-        ttk.Label(outer, text="NVIDIA NIM • Multi-agent workflow • Local Windows control").pack(anchor="w", pady=(0,10))
-
-        ttk.Label(outer, text="What should Astra do?").pack(anchor="w")
-        self.task = scrolledtext.ScrolledText(outer, height=5, wrap="word", font=("Segoe UI", 10))
-        self.task.pack(fill="x", pady=5)
-        self.task.insert("1.0", "Open my browser from the taskbar and search for NVIDIA")
-
-        controls = ttk.Frame(outer)
-        controls.pack(fill="x", pady=6)
-        self.approval = tk.BooleanVar(value=True)
-        ttk.Checkbutton(controls, text="Ask me before every computer action (recommended)", variable=self.approval).pack(side="left")
-        self.run_btn = ttk.Button(controls, text="Run Astra", command=self.start)
-        self.run_btn.pack(side="right")
-        ttk.Button(controls, text="Inspect screen", command=self.inspect_only).pack(side="right", padx=8)
-        ttk.Button(controls, text="Emergency stop", command=self.stop_notice).pack(side="right", padx=8)
-
-        self.status = tk.StringVar(value="Ready")
-        ttk.Label(outer, textvariable=self.status).pack(anchor="w", pady=4)
-        ttk.Label(outer, text="Activity log").pack(anchor="w")
-        self.log = scrolledtext.ScrolledText(outer, height=22, wrap="word", font=("Consolas", 9), state="disabled")
-        self.log.pack(fill="both", expand=True)
-        ttk.Label(outer, text="Safety: move the mouse to the top-left screen corner to trigger PyAutoGUI fail-safe.",
-                  foreground="#9a4b00").pack(anchor="w", pady=(8,0))
+        build(self)
 
     def write_log(self, text):
         self.log.configure(state="normal")
+        if self.log.tag_ranges("idle"):
+            self.log.delete("1.0", "end")
         self.log.insert("end", text + "\n")
         self.log.see("end")
         self.log.configure(state="disabled")

@@ -128,7 +128,7 @@ when required by Windows display scaling.
 
 ### AI control indicator (Windows)
 
-**Run Astra** displays a blue glow around the primary screen and cyan brackets around the pointer. They indicate an active workflow, including planning, approvals and verification; **Inspect screen** alone does not enable them. The overlay is click-through and does not modify your Windows pointer scheme. Both effects disappear when the workflow finishes or Astra exits.
+**Run Astra** displays a blue glow around the primary screen and a violet-and-mint spark beside the pointer. They indicate an active workflow, including planning, approvals and verification; **Inspect screen** alone does not enable them. The overlay is click-through and does not modify your Windows pointer scheme. Both effects disappear when the workflow finishes or Astra exits.
 
 ### Accessibility + Set-of-Mark targeting
 
