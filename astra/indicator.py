@@ -67,16 +67,15 @@ class ControlIndicator:
                     gui.DeleteObject(brush)
             if self.position:
                 x, y = self.position
-                # A cyan targeting reticle leaves the cursor and hotspot visible.
-                for radius, color in ((14, (15,102,222)), (13, (95,229,255))):
-                    pen = gui.CreatePen(c.PS_SOLID, 1, api.RGB(*color))
+                # Offset spark leaves the native cursor and its hotspot untouched.
+                for radius, color in ((7, (73,51,114)), (5, (195,175,255)), (3, (139,225,209))):
+                    pen = gui.CreatePen(c.PS_SOLID, 2, api.RGB(*color))
                     old = gui.SelectObject(dc, pen)
                     try:
-                        for sx in (-1, 1):
-                            for sy in (-1, 1):
-                                gui.MoveToEx(dc, x+sx*(radius-5), y+sy*radius)
-                                gui.LineTo(dc, x+sx*radius, y+sy*radius)
-                                gui.LineTo(dc, x+sx*radius, y+sy*(radius-5))
+                        cx, cy = x+10, y-8
+                        gui.MoveToEx(dc, cx, cy-radius)
+                        for dx, dy in ((1,-1),(radius,0),(1,1),(0,radius),(-1,1),(-radius,0),(-1,-1),(0,-radius)):
+                            gui.LineTo(dc, cx+dx, cy+dy)
                     finally:
                         gui.SelectObject(dc, old)
                         gui.DeleteObject(pen)
