@@ -7,7 +7,7 @@ if not exist .venv (
 call .venv\Scripts\activate
 python -m pip install --upgrade pip
 pip install -r requirements.txt
-pyinstaller --noconfirm --clean --onefile --windowed --name AstraComputerAgent --collect-all pyautogui --collect-all PIL app.py
+pyinstaller --noconfirm --clean --onefile --windowed --name AstraComputerAgent --collect-all pyautogui --collect-all PIL --collect-all uiautomation app.py
 echo.
 echo Build complete. EXE: dist\AstraComputerAgent.exe
 echo Keep your .env file beside the EXE. Do not share it.
