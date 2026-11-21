@@ -100,7 +100,7 @@ class AstraApp:
     def stop_notice(self):
         messagebox.showinfo("Emergency stop", "Move your mouse to the extreme top-left corner of the screen. PyAutoGUI will raise its fail-safe exception.")
 
-    def capture_clean_desktop(self):
+    def capture_clean_desktop(self, compact=True):
         """Minimize Astra before capture so the vision model sees the desktop beneath it."""
         minimized = threading.Event()
         restored = threading.Event()
@@ -120,7 +120,7 @@ class AstraApp:
         except (AttributeError, OSError):
             time.sleep(0.25)
         try:
-            image_url = screenshot_data_url()
+            image_url = screenshot_data_url(compact=compact)
         finally:
             def do_restore():
                 self.root.deiconify()
@@ -138,7 +138,7 @@ class AstraApp:
     def inspect_work(self):
         try:
             self.ui(self.set_status, "Inspecting screen...")
-            image_url = self.capture_clean_desktop()
+            image_url = self.capture_clean_desktop(compact=False)
             calibration = coordinate_calibration()
             self.ui(self.write_log, "COORDINATE CALIBRATION:\n" + json.dumps(calibration, indent=2))
             result = asyncio.run(inspect_screen(

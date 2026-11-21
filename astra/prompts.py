@@ -103,3 +103,10 @@ Return JSON:
   "uncertainties":[]
 }
 """
+
+COMPACT_SCREEN_PROMPT = GLOBAL_RULES + """
+Inspect this fresh desktop preview for the specific user task. Return a short JSON object
+with screen_summary, elements (at most six relevant names and roles), recommended_target,
+and uncertainties. For verification describe the visible evidence of success or failure;
+do not inventory unrelated icons. Never infer unreadable text or provide coordinates.
+"""

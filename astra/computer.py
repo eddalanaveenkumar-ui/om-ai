@@ -50,7 +50,10 @@ def coordinate_calibration():
         "aligned": image_size == mouse_size,
     }
 
-def screenshot_data_url():
+def screenshot_data_url(compact=False):
+    if compact:
+        from .screen_preview import jpeg_url
+        return jpeg_url(pyautogui.screenshot(), max_edge=1440)
     return "data:image/png;base64," + base64.b64encode(screenshot_bytes()).decode("ascii")
 
 def execute_action(item, coordinate_size=None):
