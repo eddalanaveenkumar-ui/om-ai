@@ -2,6 +2,31 @@
 import re
 
 
+PRESS_KEYS = frozenset('enter tab esc escape backspace delete up down left right home end pageup pagedown space'.split())
+
+
+def single_key(value):
+    if isinstance(value, str):
+        key = value.strip().lower()
+        if key in PRESS_KEYS:
+            return key
+    return None
+
+
+def planned_key(item):
+    """Accept a literal single key only; never infer a keystroke from prose."""
+    if item.get('key') not in (None, ''):
+        return single_key(item['key'])
+    keys = item.get('keys')
+    if keys is not None:
+        if not isinstance(keys, list) or len(keys) != 1 or not single_key(keys[0]):
+            return None
+        key = single_key(keys[0])
+        other = single_key(item.get('target'))
+        return key if other in (None, key) else None
+    return single_key(item.get('target'))
+
+
 def validate_ui_action(item):
     action = item.get('action')
     if action in {'type_text', 'press_key'}:

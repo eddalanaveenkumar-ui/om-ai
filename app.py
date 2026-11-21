@@ -1,6 +1,6 @@
 import json, threading, traceback, asyncio, time
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import messagebox, simpledialog
 from astra.workspace_ui import build
 from dotenv import load_dotenv
 load_dotenv()
@@ -11,7 +11,7 @@ from astra.input_activity import activity_sink
 from astra.action_executor import execute as execute_targeted
 from astra.agents import orchestrate, plan, inspect_screen, make_actions, verify
 from astra.computer import execute_action, screenshot_data_url, coordinate_calibration, ALLOWED
-from astra.ui_policy import opens_chrome, validate_ui_action
+from astra.ui_policy import PRESS_KEYS, opens_chrome, planned_key, single_key, validate_ui_action
 
 from astra.indicator import ControlIndicator
 
@@ -40,7 +40,7 @@ class AstraApp:
     def ui(self, fn, *args):
         self.root.after(0, lambda: fn(*args))
 
-    def ask_approval(self, description):
+    def ask_on_ui(self, dialog):
         # Workflow runs on a worker; modal Tk dialogs belong to the UI thread.
         done = threading.Event()
         answer = []
@@ -48,13 +48,27 @@ class AstraApp:
         def show():
             try:
                 self.root.deiconify()
-                answer.append(messagebox.askyesno("Approve Astra action", description, parent=self.root))
+                answer.append(dialog())
             finally:
                 done.set()
 
         self.root.after(0, show)
         done.wait()
-        return bool(answer and answer[0])
+        return answer[0] if answer else None
+
+    def ask_approval(self, description):
+        return self.ask_on_ui(lambda: messagebox.askyesno("Approve Astra action", description, parent=self.root))
+
+    def clarify_key(self, item):
+        def dialog():
+            message = ("The proposed key is missing or ambiguous. No key has been pressed.\n"
+                       + str(item.get('reason', '')) + "\nChoose one: " + ', '.join(sorted(PRESS_KEYS)))
+            while True:
+                value = simpledialog.askstring("Which key should Astra press?", message, parent=self.root)
+                if value is None or single_key(value):
+                    return single_key(value)
+                messagebox.showwarning("Unsupported key", "Enter one listed key, or Cancel to stop.", parent=self.root)
+        return self.ask_on_ui(dialog)
 
     def set_status(self, value):
         self.status.set(value)
@@ -180,6 +194,13 @@ class AstraApp:
                 skill_step = prompt and isinstance(item, dict) and item.get("action") in {"launch_default_browser", "confirm_chatgpt"}
                 if not skill_step and (not isinstance(item, dict) or item.get("action") not in ALLOWED):
                     raise ValueError(f"Rejected unsupported action: {item}")
+                if item["action"] == "press_key":
+                    key = planned_key(item) or self.clarify_key(item)
+                    if key is None:
+                        execution_log.append({"action": item, "status": "cancelled_before_keypress"})
+                        halted = True
+                        break
+                    item = dict(item, key=key)
                 validate_ui_action(item)
                 if profile_ready and opens_chrome(item):
                     raise ValueError("Chrome is already open; refusing to reopen it after profile selection.")

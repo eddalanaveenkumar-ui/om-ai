@@ -23,3 +23,11 @@ class UIPolicyTests(unittest.TestCase):
     def test_missing_search_payload(self):
         with self.assertRaises(ValueError):
             validate_ui_action(dict(action='type_text', target='address bar', reason="Type NVIDIA"))
+
+    def test_normalize_planner_key(self):
+        from astra.ui_policy import planned_key
+        for item in [{'target':'Enter'}, {'keys':['Enter']}, {'key':' ENTER '}]:
+            self.assertEqual(planned_key(item), 'enter')
+        for item in [{}, {'reason':'Press Enter to submit'}, {'keys':['ctrl','s']},
+                     {'key':'unknown','target':'Enter'}, {'keys':['Enter'],'target':'Tab'}]:
+            self.assertIsNone(planned_key(item))
