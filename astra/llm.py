@@ -1,4 +1,6 @@
 import json
+from time import perf_counter
+from .input_activity import activity
 from openai import AsyncOpenAI
 from .config import settings
 
@@ -18,6 +20,7 @@ def make_client(agent: str) -> AsyncOpenAI:
 
 async def ask(agent: str, model: str, system_prompt: str, user_content,
               max_tokens=None) -> str:
+    started = perf_counter()
     client = make_client(agent)
     try:
         request_options = {}
@@ -53,6 +56,7 @@ async def ask(agent: str, model: str, system_prompt: str, user_content,
         raise LLMError(f"{agent} model request failed ({model}): {exc}") from exc
     finally:
         await client.close()
+        activity("model_request_time", agent=agent, seconds=round(perf_counter() - started, 2))
 
 def parse_json(text: str) -> dict:
     """Parse a JSON object even when surrounded by prose or Markdown fences."""

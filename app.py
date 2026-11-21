@@ -6,7 +6,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from astra.recovery import RecoveryBudget, TargetNotReady, repair_queue
-from astra.skills import chatgpt_goal, chatgpt_skill, launch_default_browser
+from astra.skills import launch_default_browser
+from astra.preparation import prepare
 from astra.input_activity import activity_sink
 from astra.action_executor import execute as execute_targeted
 from astra.agents import orchestrate, plan, inspect_screen, make_actions, verify
@@ -165,26 +166,19 @@ class AstraApp:
 
     async def async_workflow(self, task):
         execution_log = []
-        self.ui(self.set_status, "1/6 — Orchestrating")
-        routing = await orchestrate(task)
-        self.ui(self.write_log, "ORCHESTRATOR:\n" + json.dumps(routing, indent=2))
+        self.ui(self.set_status, "Preparing workflow")
+        started = time.perf_counter()
 
-        self.ui(self.set_status, "2/6 — Planning")
-        plan_data = await plan(task, routing)
-        self.ui(self.write_log, "PLAN:\n" + json.dumps(plan_data, indent=2))
+        async def inspect_initial(request):
+            image = await asyncio.to_thread(self.capture_clean_desktop)
+            return await inspect_screen(request, screenshot_url=image)
 
-        # Desktop tasks use screenshot grounding and allowlisted local actions.
-        self.ui(self.set_status, "3/6 — Inspecting desktop")
-        observation = None
-        if routing.get("needs_computer", True):
-            clean_image = await asyncio.to_thread(self.capture_clean_desktop)
-            observation = await inspect_screen(task, screenshot_url=clean_image)
-            self.ui(self.write_log, "COMPUTER AGENT OBSERVATION:\n" + json.dumps(observation, indent=2))
+        def report(label, data):
+            self.ui(self.write_log, label + ":\n" + json.dumps(data, indent=2))
 
-        self.ui(self.set_status, "4/6 — Preparing computer actions")
-        prompt = chatgpt_goal(task)
-        proposed = ({"skill": "chatgpt_creation", "actions": chatgpt_skill(prompt)} if prompt
-                    else await make_actions(task, plan_data, observation))
+        routing, plan_data, prompt, proposed = await prepare(
+            task, orchestrate, plan, inspect_initial, make_actions, report)
+        self.ui(self.write_log, f"Workflow prepared in {time.perf_counter() - started:.1f}s")
         actions = proposed.get("actions", [])
 
         self.ui(self.write_log, "PROPOSED ACTIONS:\n" + json.dumps(proposed, indent=2))
