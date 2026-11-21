@@ -1,5 +1,6 @@
 import base64, io, time, ctypes, platform
 from PIL import Image
+from .ui_policy import PRESS_KEYS
 
 # Set Windows DPI awareness BEFORE importing PyAutoGUI. Without this, Windows
 # display scaling (125%, 150%, etc.) can make screenshot pixels and mouse
@@ -105,9 +106,7 @@ def execute_action(item, coordinate_size=None):
 
     if action == "press_key":
         key = str(item.get("key", "")).lower()
-        allowed_keys = {"enter","tab","esc","escape","backspace","delete","up","down",
-                        "left","right","home","end","pageup","pagedown","space"}
-        if key not in allowed_keys:
+        if key not in PRESS_KEYS:
             raise ValueError(f"Key not allowed: {key}")
         pyautogui.press(key)
         return {"status": "key_pressed", "key": key}
