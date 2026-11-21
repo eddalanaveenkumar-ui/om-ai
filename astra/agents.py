@@ -5,7 +5,7 @@ from .config import settings
 from .llm import ask_json
 from .prompts import (ORCHESTRATOR_PROMPT, PLANNER_PROMPT, EXECUTOR_PROMPT,
                       VERIFIER_PROMPT, COMPUTER_PROMPT)
-from .computer import screenshot_data_url, screen_size, screenshot_dimensions
+from .computer import screenshot_data_url, screen_size
 
 async def orchestrate(user_task):
     return await ask_json("orchestrator", settings.orchestrator_model,
@@ -34,8 +34,7 @@ async def make_actions(user_task, plan_data, screen_observation=None):
         "user_task": user_task,
         "approved_plan": plan_data,
         "screen_observation": screen_observation,
-        "screen_size": screen_size(),
-        "screenshot_size": screenshot_dimensions()
+        "screen_size": screen_size()
     }
     return await ask_json("executor", settings.executor_model, EXECUTOR_PROMPT,
                           json.dumps(payload, ensure_ascii=False))
