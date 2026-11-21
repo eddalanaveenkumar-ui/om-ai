@@ -92,3 +92,24 @@ def extract(size, system_ui=False):
     if sys.platform == 'darwin':
         return _mac(size)
     return None, {}
+
+
+def center_hit(window, element, point):
+    """Verify the exact visible UIA control under a center on Windows."""
+    if sys.platform != 'win32':
+        return False
+    import ctypes
+    import uiautomation as ui
+    from comtypes import COMError
+    with ui.UIAutomationInitializerInThread():
+        try:
+            node = ui.ControlFromPoint(*point)
+            while node and ctypes.windll.user32.GetForegroundWindow() == window:
+                r = node.BoundingRectangle
+                if ([r.left,r.top,r.right,r.bottom] == element['bbox'] and node.Name == element['name']
+                        and node.ControlTypeName.removesuffix('Control') == element['role']):
+                    return node.IsEnabled and not node.IsOffscreen
+                node = node.GetParentControl()
+        except COMError:
+            pass
+    return False

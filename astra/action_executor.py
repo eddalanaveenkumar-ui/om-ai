@@ -4,7 +4,7 @@ import os
 import re
 import sys
 from PIL import ImageDraw
-from .accessibility_extractor import extract
+from .accessibility_extractor import extract, center_hit
 from .som_annotator import annotate, pixels
 from .vlm_grounding import select
 from .grounding import locate
@@ -38,18 +38,32 @@ async def resolve(target, action='click', text=None):
         activity('target_measured', source='vision', screenshot_px=[x,y], mouse_xy=point,
                  screenshot_size=frame, desktop_size=size)
         return point
-    marked = annotate(image, elements, size)
+    # Only use literal, unique names. Descriptions, duplicates and uncertain hit
+    # tests still go through visual selection. No coordinates are cached.
+    matches = [i for i,e in elements.items() if e['name'].strip().casefold() == target.strip().casefold()]
+    key = matches[0] if len(matches) == 1 else None
+    local = (key is not None and (action != "type" or elements[key]["role"] == "Edit")
+             and center_hit(window, elements[key], center(elements[key])))
     debug = os.getenv('DEBUG_SOM','').lower() in {'true','1','yes'}
-    if debug:
-        marked.save('debug_som.png')
-    key = await select(marked, elements, target, action, text)
+    if debug or not local:
+        marked = annotate(image, elements, size)
+        if debug:
+            marked.save('debug_som.png')
+    if not local:
+        key = await select(marked, elements, target, action, text)
     element = elements[key]
     point = center(element)
     x,y = pixels(point, image.size, size)
-    current_window, current_elements = extract(size, system_ui)
+    if center_hit(window, element, point):
+        unchanged = True
+    elif local:
+        unchanged = False
+    else:
+        current_window, current_elements = extract(size, system_ui)
+        unchanged = window == current_window and element in current_elements.values()
     current = gui.screenshot().convert('RGB')
     patch = (max(0,x-12), max(0,y-12), min(image.width,x+13), min(image.height,y+13))
-    if (window != current_window or element not in current_elements.values() or current.size != image.size
+    if (not unchanged or current.size != image.size
             or logical_size(gui) != size or current.crop(patch).tobytes() != image.crop(patch).tobytes()):
         raise TargetNotReady('Selected control changed during inference. No input performed.')
     if debug:
