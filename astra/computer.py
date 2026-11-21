@@ -29,7 +29,7 @@ def screen_size():
 def screenshot_bytes():
     image = pyautogui.screenshot()
     buf = io.BytesIO()
-    image.save(buf, format="PNG")
+    image.save(buf, format="PNG", compress_level=1)
     return buf.getvalue()
 
 def screenshot_dimensions():
@@ -110,3 +110,27 @@ def execute_action(item, coordinate_size=None):
             raise ValueError(f"Key not allowed: {key}")
         pyautogui.press(key)
         return {"status": "key_pressed", "key": key}
+
+
+def selected_explorer_item(x, y):
+    """Fail closed before Delete: foreground Explorer and exactly one selected item at hit point."""
+    if platform.system() != 'Windows':
+        return False
+    import win32gui
+    from pywinauto import Desktop
+    hwnd = win32gui.GetForegroundWindow()
+    if win32gui.GetClassName(hwnd) not in {'CabinetWClass', 'ExploreWClass', 'Progman', 'WorkerW'}:
+        return False
+    if win32gui.GetAncestor(win32gui.WindowFromPoint((x, y)), 2) != hwnd:
+        return False
+    ctrl = Desktop(backend='uia').from_point(x, y)
+    while ctrl and ctrl.element_info.control_type not in {'ListItem', 'DataItem', 'TreeItem'}:
+        ctrl = ctrl.parent()
+    if ctrl is None:
+        return False
+    selection = ctrl.iface_selection_item
+    if not selection.CurrentIsSelected:
+        return False
+    from comtypes.gen.UIAutomationClient import IUIAutomationSelectionPattern
+    pattern = selection.CurrentSelectionContainer.GetCurrentPattern(10001).QueryInterface(IUIAutomationSelectionPattern)
+    return pattern.GetCurrentSelection().Length == 1 and win32gui.GetForegroundWindow() == hwnd

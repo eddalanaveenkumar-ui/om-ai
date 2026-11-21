@@ -31,3 +31,13 @@ class UIPolicyTests(unittest.TestCase):
         for item in [{}, {'reason':'Press Enter to submit'}, {'keys':['ctrl','s']},
                      {'key':'unknown','target':'Enter'}, {'keys':['Enter'],'target':'Tab'}]:
             self.assertIsNone(planned_key(item))
+
+    def test_folder_selection_delete_is_explicit(self):
+        from astra.ui_policy import folder_key_pair
+        click = {'action':'click','target':'Reports folder'}
+        key = {'action':'press_key'}
+        task = 'Select the Reports folder and pree delete key'
+        self.assertTrue(folder_key_pair(task, click, key))
+        self.assertFalse(folder_key_pair(task, click, dict(key,key='enter')))
+        self.assertFalse(folder_key_pair('Select the folder; do not press Delete', click, key))
+        self.assertFalse(folder_key_pair('Select the folder', click, key))

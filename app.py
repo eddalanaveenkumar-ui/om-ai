@@ -10,8 +10,8 @@ from astra.skills import chatgpt_goal, chatgpt_skill, launch_default_browser
 from astra.input_activity import activity_sink
 from astra.action_executor import execute as execute_targeted
 from astra.agents import orchestrate, plan, inspect_screen, make_actions, verify
-from astra.computer import execute_action, screenshot_data_url, coordinate_calibration, ALLOWED
-from astra.ui_policy import PRESS_KEYS, opens_chrome, planned_key, single_key, validate_ui_action
+from astra.computer import execute_action, screenshot_data_url, coordinate_calibration, selected_explorer_item, ALLOWED
+from astra.ui_policy import PRESS_KEYS, folder_key_pair, opens_chrome, planned_key, single_key, validate_ui_action
 
 from astra.indicator import ControlIndicator
 
@@ -109,8 +109,15 @@ class AstraApp:
             minimized.set()
 
         self.root.after(0, do_minimize)
-        minimized.wait(timeout=3)
-        time.sleep(0.8)  # allow Windows to finish minimizing/redrawing
+        if not minimized.wait(timeout=3):
+            raise RuntimeError("Astra did not minimize; capture cancelled.")
+        # Wait for the compositor rather than sleeping 800 ms on every capture.
+        import ctypes
+        try:
+            if ctypes.windll.dwmapi.DwmFlush() != 0:
+                time.sleep(0.25)
+        except (AttributeError, OSError):
+            time.sleep(0.25)
         try:
             image_url = screenshot_data_url()
         finally:
@@ -171,8 +178,6 @@ class AstraApp:
         observation = None
         if routing.get("needs_computer", True):
             clean_image = await asyncio.to_thread(self.capture_clean_desktop)
-            calibration = await asyncio.to_thread(coordinate_calibration)
-            self.ui(self.write_log, "COORDINATE CALIBRATION:\n" + json.dumps(calibration, indent=2))
             observation = await inspect_screen(task, screenshot_url=clean_image)
             self.ui(self.write_log, "COMPUTER AGENT OBSERVATION:\n" + json.dumps(observation, indent=2))
 
@@ -194,6 +199,7 @@ class AstraApp:
                 skill_step = prompt and isinstance(item, dict) and item.get("action") in {"launch_default_browser", "confirm_chatgpt"}
                 if not skill_step and (not isinstance(item, dict) or item.get("action") not in ALLOWED):
                     raise ValueError(f"Rejected unsupported action: {item}")
+                paired_delete = (index < len(actions) and folder_key_pair(task, item, actions[index]))
                 if item["action"] == "press_key":
                     key = planned_key(item) or self.clarify_key(item)
                     if key is None:
@@ -211,7 +217,9 @@ class AstraApp:
                         halted = True
                         break
                     continue
-                if self.approval.get():
+                if paired_delete:
+                    description += "\nThen press Delete on the single selected Explorer item. Approve both steps?"
+                if paired_delete or self.approval.get():
                     approved = self.ask_approval(description)
                     if not approved:
                         execution_log.append({"action": item, "status": "skipped_by_user"})
@@ -220,8 +228,9 @@ class AstraApp:
                 self.ui(self.set_status, f"4/6 — Executing action {index}/{len(actions)}")
                 # Approval dialogs and clean-screen inspection restore Astra. Keep it
                 # out of the actual input path before grounding or sending keys.
-                self.root.iconify()
-                await asyncio.sleep(0.5)
+                if self.root.state() != "iconic":
+                    self.root.iconify()
+                    await asyncio.sleep(0.25)
                 if item["action"] == "launch_default_browser":
                     result = await asyncio.to_thread(launch_default_browser)
                 elif item["action"] in {"click", "double_click", "right_click", "move", "scroll", "type_text"}:
@@ -250,6 +259,23 @@ class AstraApp:
                     result = execute_action(item)
                 execution_log.append({"action": item, "result": result})
                 self.ui(self.write_log, "EXECUTED:\n" + json.dumps(execution_log[-1], indent=2))
+
+                if paired_delete:
+                    # No dialog, minimize, or separate approval between selection and key.
+                    try:
+                        selected = selected_explorer_item(result['x'], result['y'])
+                    except Exception as exc:
+                        selected = False
+                        self.ui(self.write_log, f'Explorer selection check unavailable: {exc}')
+                    if not selected:
+                        self.ui(self.write_log, "Delete withheld: could not verify a single selected Explorer item.")
+                        halted = True
+                        break
+                    key_action = {"action": "press_key", "key": "delete"}
+                    key_result = execute_action(key_action)
+                    execution_log.append({"action": key_action, "result": key_result})
+                    self.ui(self.write_log, "EXECUTED: " + json.dumps(execution_log[-1]))
+                    index += 1
 
                 if opens_chrome(item) or item["action"] == "launch_default_browser":
                     self.ui(self.set_status, "Paused — confirm browser profile")

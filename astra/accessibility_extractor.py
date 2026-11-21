@@ -2,7 +2,7 @@
 import math
 import sys
 
-ROLES = {'Button', 'Edit', 'CheckBox', 'RadioButton', 'ComboBox', 'MenuItem', 'TabItem', 'Hyperlink'}
+ROLES = {'Button', 'Edit', 'CheckBox', 'RadioButton', 'ComboBox', 'MenuItem', 'TabItem', 'Hyperlink', 'ListItem', 'DataItem', 'TreeItem'}
 AX_ROLES = {'AXButton': 'Button', 'AXTextField': 'Edit', 'AXTextArea': 'Edit',
             'AXCheckBox': 'CheckBox', 'AXRadioButton': 'RadioButton', 'AXComboBox': 'ComboBox',
             'AXMenuItem': 'MenuItem', 'AXTab': 'TabItem', 'AXLink': 'Hyperlink'}

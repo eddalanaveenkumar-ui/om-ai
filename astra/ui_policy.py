@@ -56,3 +56,16 @@ def opens_chrome(item):
             bool(re.search(r'\bchrome\b', target, re.I)) and
             (bool(re.search(r'\b(taskbar|desktop|shortcut|dock|pinned|start menu)\b', target, re.I))
              or target.lower().strip() in {'chrome', 'google chrome', 'chrome icon', 'google chrome icon'}))
+
+
+def folder_key_pair(task, click, following):
+    """Resolve only a direct select-folder then Delete instruction, never a default key."""
+    if (not isinstance(following, dict) or click.get('action') != 'click'
+            or following.get('action') != 'press_key' or not re.search(r'\bfolder\b', task, re.I)):
+        return False
+    if not re.search(r'\b(?:press|pree|hit)\s+(?:the\s+)?delete(?:\s+key)?[.!\s]*$', task, re.I):
+        return False
+    if re.search(r"\b(?:not|never|don.t|without|instead)\b", task, re.I):
+        return False
+    key = planned_key(following)
+    return key == 'delete' or (key is None and not any(following.get(k) for k in ('key','keys')))
