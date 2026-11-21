@@ -17,7 +17,12 @@ def annotate(image, elements, logical_size):
         right, bottom = pixels((r, b), out.size, logical_size)
         draw.rectangle((x,y,max(x,right-1),max(y,bottom-1)), outline='#ffda26', width=2)
         labels.append((str(key), x, y, right, bottom))
-    occupied = []
+    # Index earlier badges by tile; distant badges cannot collide.
+    occupied = {}
+    def tiles(a,b,w,h):
+        for i in range(a//64, (a+w-1)//64+1):
+            for j in range(b//64, (b+h-1)//64+1):
+                yield i,j
     for text, x, y, right, bottom in labels:
         l, t, r, b = draw.textbbox((0,0), text, font=font)
         w, h = r-l+6, b-t+6
@@ -27,10 +32,12 @@ def annotate(image, elements, logical_size):
         options = [(max(0,min(a,out.width-w)), max(0,min(b,out.height-h))) for a,b in positions]
         def overlap(pos):
             a,b = pos
+            nearby = {idx: rect for tile in tiles(a,b,w,h) for idx,rect in occupied.get(tile, ())}
             return sum(max(0,min(a+w,r)-max(a,l))*max(0,min(b+h,d)-max(b,t))
-                       for l,t,r,d in occupied)
+                       for l,t,r,d in nearby.values())
         x,y = min(options, key=overlap)
-        occupied.append((x,y,x+w,y+h))
+        for tile in tiles(x,y,w,h):
+            occupied.setdefault(tile, []).append((text, (x,y,x+w,y+h)))
         draw.rectangle((x,y,x+w-1,y+h-1), fill='#15102d', outline='#ffda26')
         draw.text((x+3-l,y+3-t), text, font=font, fill='white')
     return out
